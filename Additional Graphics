@@ -92,7 +92,7 @@ LA_clean <- LA_aggregated %>%
 
 ```{r}
 #Map using Google API
-register_google(key = "AIzaSyAT8bb3HoE9-zJysXUshA3eQ4vi1v3u_GA")
+register_google(key = "***")
 la_map <- get_map(location = c(lon = -118.2437, lat = 34.0522), zoom = 9, maptype = "terrain", source = "google")
 
 ggmap(la_map) +
@@ -115,7 +115,7 @@ RV_aggregated <- RV %>%
 ```
 
 ```{r}
-register_google(key = "AIzaSyAT8bb3HoE9-zJysXUshA3eQ4vi1v3u_GA")
+register_google(key = "***")
 la_map <- get_map(location = c(lon = -116, lat = 33.9533), zoom = 8, maptype = "terrain", source = "google")
 
 ggmap(la_map) +
