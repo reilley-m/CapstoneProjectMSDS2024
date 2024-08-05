@@ -1,0 +1,496 @@
+```{r load packages, include=FALSE}
+library(dplyr)
+library(ggplot2)
+library(maps)
+library(ggmap)
+library(tigris)
+library(sf)
+library(lubridate)
+library(geosphere)
+library(tidyr)
+library(units)
+library(mice)
+library(caret)
+library(smotefamily)
+library(e1071)
+library(nnet)
+library(class)
+library(car)
+library(rpart)
+library(randomForest)
+library(zoo)
+library(ROSE)
+library(gridExtra)
+library(pROC)
+
+```
+
+
+```{r load data}
+LA_data_comp <- read.csv("finalla_dataset_w_frp.csv")
+LA_NDVI_2016 <- read.csv("LA_NDVI_2016.csv")
+LA_NDVI_2017 <- read.csv("LA_NDVI_2017.csv")
+LA_NDVI_2018 <- read.csv("LA_NDVI_2018.csv")
+LA_NDVI_2019 <- read.csv("LA_NDVI_2019.csv")
+LA_NDVI_2020 <- read.csv("20_NDVI.csv")
+```
+
+Impute 2019
+```{r pressure, echo=FALSE}
+imputed_LA_NDVI_2019 <- mice(LA_NDVI_2019, m=5, maxit=50, method='pmm', seed=500)
+completed_LA_NDVI_2019 <- complete(imputed_LA_NDVI_2019)
+```
+
+Impute 2016, 2017, 2018, 2020
+```{r}
+#2016
+imputed_LA_NDVI_2016 <- mice(LA_NDVI_2016, m=5, maxit=50, method='pmm', seed=500)
+completed_LA_NDVI_2016 <- complete(imputed_LA_NDVI_2016)
+#2017
+imputed_LA_NDVI_2017 <- mice(LA_NDVI_2017, m=5, maxit=50, method='pmm', seed=500)
+completed_LA_NDVI_2017 <- complete(imputed_LA_NDVI_2017)
+#2018
+imputed_LA_NDVI_2018 <- mice(LA_NDVI_2018, m=5, maxit=50, method='pmm', seed=500)
+completed_LA_NDVI_2018 <- complete(imputed_LA_NDVI_2018)
+#2020
+imputed_LA_NDVI_2020 <- mice(LA_NDVI_2020, m=5, maxit=50, method='pmm', seed=500)
+completed_LA_NDVI_2020 <- complete(imputed_LA_NDVI_2020)
+```
+```{r}
+completed_LA_NDVI_2020 <- completed_LA_NDVI_2020 %>%
+  select(-EndDate) %>%
+  rename(Date = StartDate)
+```
+
+MERGE ALL NDVI DATA
+```{r}
+LA_NDVI_combined <- bind_rows(completed_LA_NDVI_2016, completed_LA_NDVI_2017, completed_LA_NDVI_2018, completed_LA_NDVI_2019, completed_LA_NDVI_2020)
+```
+```{r}
+LA_NDVI_combined <- LA_NDVI_combined %>%
+  select(-.geo)
+```
+
+```{r}
+LA_NDVI_combined <- LA_NDVI_combined %>%
+  rename(matched_lat = Latitude) %>%
+  rename(matched_lon = Longitude)
+```
+
+```{r}
+LA_NDVI_combined <- LA_NDVI_combined %>%
+  rename(DATE = Date)
+LA_data_merged <- LA_data_comp %>%
+  left_join(LA_NDVI_combined, by = c("DATE", "matched_lat", "matched_lon"))
+```
+Last Observation Carried Forward
+```{r}
+
+LA_data_merged2 <- LA_data_merged %>%
+  arrange(matched_lat, matched_lon, DATE) %>%
+  group_by(matched_lat, matched_lon) %>%
+  mutate(NDVI = na.locf(NDVI, na.rm = FALSE)) %>%
+  ungroup()
+```
+```{r}
+#remove irrelevant columns
+LA_data_merged2 <- LA_data_merged2 %>%
+  select(DATE, matched_lat, matched_lon, AWND, PRCP, TAVG, NDVI, fire)
+```
+
+```{r}
+# Remove rows with NA values
+LA_no_NA <- na.omit(LA_data_merged2)
+print(LA_no_NA)
+
+```
+
+```{r}
+fire_count <- sum(LA_no_NA$fire == "fire")
+print(fire_count)
+```
+```{r}
+LA_no_NA <- LA_no_NA %>%
+  select(DATE, matched_lat, matched_lon, AWND, PRCP, TAVG, NDVI, fire)
+```
+
+```{r}
+LA_no_NA<- LA_no_NA %>%
+  filter(NDVI != -9999)
+LA_no_NAT_filtered <- LA_no_NA %>%
+  filter(NDVI >= -1.0)
+LA_no_NAT_filtered <- LA_no_NAT_filtered %>%
+  filter(NDVI <= 1.0)
+LA_no_NAT_filtered <- LA_no_NAT_filtered %>%
+  filter(TAVG >= 18)
+```
+
+```{r}
+#create histograms and density plots for each variable
+variables <- c("AWND", "PRCP", "TAVG", "NDVI")
+for (var in variables) {
+  p <- ggplot(LA_no_NAT_filtered, aes_string(x = var)) +
+    geom_histogram(aes(y = ..density..), binwidth = 1, color = "black", fill = "blue", alpha = 0.7) +
+    geom_density(color = "red", size = 1) +
+    labs(title = paste("Histogram and Density Plot of", var), x = var, y = "Density")
+  print(p)
+}
+
+
+```
+
+```{r}
+#Data transformation
+LA_data_prepared <- LA_no_NAT_filtered %>%
+  mutate(
+    AWND_sqrt = sqrt(AWND),
+    PRCP_sqrt = sqrt(PRCP),
+    TAVG = sqrt(TAVG), 
+    NDVI_yeojohnson = predict(preProcess(LA_no_NAT_filtered[, "NDVI", drop = FALSE], method = "YeoJohnson"), LA_no_NAT_filtered)[["NDVI"]]
+  )
+
+summary(LA_data_prepared)
+
+```
+
+```{r}
+#Plot again
+variables <- c("AWND_sqrt", "PRCP_sqrt", "TAVG", "NDVI_yeojohnson")
+for (var in variables) {
+  p <- ggplot(LA_data_prepared, aes_string(x = var)) +
+    geom_histogram(aes(y = ..density..), binwidth = 1, color = "black", fill = "blue", alpha = 0.7) +
+    geom_density(color = "red", size = 1) +
+    labs(title = paste("Histogram and Density Plot of", var), x = var, y = "Density")
+  print(p)
+}
+```
+
+```{r}
+#Ensure DATE is formatted
+LA_data_prepared <- LA_data_prepared %>%
+  mutate(DATE = as.Date(DATE))
+LA_data_prepared$fire <- as.factor(LA_data_prepared$fire)
+summary(LA_data_prepared)
+```
+
+
+```{r}
+#Apply ROSE for balancing data
+balanced_data <- ovun.sample(fire ~ ., data = LA_data_prepared, method = "both", N = 2 * table(LA_data_prepared$fire)[1], seed = 1)$data
+
+table(balanced_data$fire)
+
+
+```
+
+```{r}
+b_data <- balanced_data %>%
+  select(AWND_sqrt, PRCP_sqrt, TAVG, NDVI_yeojohnson, fire)
+b_data$fire <- ifelse(b_data$fire == "no_fire", 0, 1)
+str(b_data)
+write.csv(b_data, "b_data.csv", row.names = FALSE)
+```
+
+MODELING
+```{r}
+#Split data into training and test sets
+set.seed(123)
+trainIndex <- createDataPartition(b_data$fire, p = .8, 
+                                  list = FALSE, 
+                                  times = 1)
+train_data <- b_data[trainIndex,]
+test_data  <- b_data[-trainIndex,]
+
+
+train_data$fire <- as.factor(train_data$fire)
+test_data$fire <- as.factor(test_data$fire)
+
+#Check levels
+levels(train_data$fire)
+levels(test_data$fire)
+
+
+```
+
+
+```{r}
+# 1. Naive Bayes
+naive_model <- naiveBayes(fire ~ ., data = train_data)
+naive_pred <- predict(naive_model, test_data)
+naive_pred <- factor(naive_pred, levels = levels(test_data$fire))
+naive_conf <- confusionMatrix(naive_pred, test_data$fire, positive = "1")
+print(naive_conf)
+
+# 2. ANN
+ann_model <- nnet(fire ~ ., data = train_data, size = 10, maxit = 200)
+ann_pred <- predict(ann_model, test_data, type = "class")
+ann_pred <- factor(ann_pred, levels = levels(test_data$fire))
+ann_conf <- confusionMatrix(ann_pred, test_data$fire, positive = "1")
+print(ann_conf)
+
+# 3. SVM
+svm_model <- svm(fire ~ ., data = train_data, probability = TRUE)
+svm_pred <- predict(svm_model, test_data)
+svm_pred <- factor(svm_pred, levels = levels(test_data$fire))
+svm_conf <- confusionMatrix(svm_pred, test_data$fire, positive = "1")
+print(svm_conf)
+
+# 4. KNN
+knn_pred <- knn(train = train_data[, -which(names(train_data) == "fire")],
+                test = test_data[, -which(names(test_data) == "fire")],
+                cl = train_data$fire, k = 5)
+knn_pred <- factor(knn_pred, levels = levels(test_data$fire))
+knn_conf <- confusionMatrix(knn_pred, test_data$fire, positive = "1")
+print(knn_conf)
+
+# 5. RF
+rf_model <- randomForest(fire ~ ., data = train_data, importance = TRUE, ntree = 500)
+rf_predictions <- predict(rf_model, newdata = test_data)
+rf_conf <- confusionMatrix(rf_predictions, test_data$fire, positive = "1")
+print(rf_conf)
+
+
+# 6. DT
+dt_model <- rpart(fire ~ ., data = train_data, method = "class")
+dt_predictions <- predict(dt_model, newdata = test_data, type = "class")
+dt_conf <- confusionMatrix(dt_predictions, test_data$fire, positive = "1")
+print(dt_conf)
+```
+
+```{r}
+#Extract performance metrics
+extract_metrics <- function(conf_matrix) {
+  data.frame(
+    Accuracy = conf_matrix$overall['Accuracy'],
+    Precision = conf_matrix$byClass['Pos Pred Value'],
+    Recall = conf_matrix$byClass['Sensitivity'],
+    F1 = 2 * (conf_matrix$byClass['Pos Pred Value'] * conf_matrix$byClass['Sensitivity']) / 
+         (conf_matrix$byClass['Pos Pred Value'] + conf_matrix$byClass['Sensitivity'])
+  )
+}
+
+#Naive Bayes Performance
+naive_metrics <- extract_metrics(naive_conf)
+naive_metrics$Model <- "Naive Bayes"
+
+#ANN Performance
+ann_metrics <- extract_metrics(ann_conf)
+ann_metrics$Model <- "ANN"
+
+#SVM Performance
+svm_metrics <- extract_metrics(svm_conf)
+svm_metrics$Model <- "SVM"
+
+#KNN Performance
+knn_metrics <- extract_metrics(knn_conf)
+knn_metrics$Model <- "KNN"
+
+#RF Performance
+rf_metrics <- extract_metrics(rf_conf)
+rf_metrics$Model <- "RF"
+
+#Decision Tree Performance
+dt_metrics <- extract_metrics(dt_conf)
+dt_metrics$Model <- "DT"
+
+#compare metrics
+model_comparison <- rbind(naive_metrics, ann_metrics, svm_metrics, knn_metrics, rf_metrics, dt_metrics)
+print(model_comparison)
+```
+```{r}
+#ANN model
+ann_model <- nnet(fire ~ ., data = train_data, size = 10, maxit = 200)
+ann_probs <- predict(ann_model, test_data, type = "raw")
+
+#Calculate AUC-ROC for ANN
+roc_ann <- roc(test_data$fire, ann_probs)
+auc_ann <- auc(roc_ann)
+print(paste("AUC-ROC for ANN:", auc_ann))
+
+#Plot ROC curve for ANN
+plot(roc_ann, main = paste("AUC-ROC Curve for ANN (AUC =", round(auc_ann, 2), ")"))
+
+#SVM model
+svm_model <- svm(fire ~ ., data = train_data, probability = TRUE)
+svm_probs <- attr(predict(svm_model, test_data, probability = TRUE), "probabilities")[, 2]
+
+#Calculate AUC-ROC for SVM
+roc_svm <- roc(test_data$fire, svm_probs)
+auc_svm <- auc(roc_svm)
+print(paste("AUC-ROC for SVM:", auc_svm))
+
+#Plot ROC curve for SVM
+plot(roc_svm, main = paste("AUC-ROC Curve for SVM (AUC =", round(auc_svm, 2), ")"))
+
+#KNN model
+knn_pred <- knn(train = train_data[, -which(names(train_data) == "fire")],
+                test = test_data[, -which(names(test_data) == "fire")],
+                cl = train_data$fire, k = 5)
+knn_probs <- as.numeric(knn_pred) - 1
+
+#Calculate AUC-ROC for KNN
+roc_knn <- roc(test_data$fire, knn_probs)
+auc_knn <- auc(roc_knn)
+print(paste("AUC-ROC for KNN:", auc_knn))
+
+#Plot ROC curve for KNN
+plot(roc_knn, main = paste("AUC-ROC Curve for KNN (AUC =", round(auc_knn, 2), ")"))
+
+#Rf model
+rf_model <- randomForest(fire ~ ., data = train_data, importance = TRUE, ntree = 500)
+rf_probs <- predict(rf_model, newdata = test_data, type = "prob")[, 2]
+
+#Calculate AUC-ROC for RF
+roc_rf <- roc(test_data$fire, rf_probs)
+auc_rf <- auc(roc_rf)
+print(paste("AUC-ROC for RF:", auc_rf))
+
+#Plot ROC curve for RF
+plot(roc_rf, main = paste("AUC-ROC Curve for RF (AUC =", round(auc_rf, 2), ")"))
+
+#Dt model
+dt_model <- rpart(fire ~ ., data = train_data, method = "class")
+dt_probs <- predict(dt_model, newdata = test_data, type = "prob")[, 2]
+
+#calculate AUC-ROC for DT
+roc_dt <- roc(test_data$fire, dt_probs)
+auc_dt <- auc(roc_dt)
+print(paste("AUC-ROC for DT:", auc_dt))
+
+#Plot ROC curve for DT
+plot(roc_dt, main = paste("AUC-ROC Curve for DT (AUC =", round(auc_dt, 2), ")"))
+
+
+```
+
+
+Feature Importance
+```{r}
+rf_model <- randomForest(fire ~ ., data = train_data, importance = TRUE, ntree = 500)
+rf_predictions <- predict(rf_model, newdata = test_data)
+rf_conf <- confusionMatrix(rf_predictions, test_data$fire, positive = "1")
+print(rf_conf)
+
+#Extract importance
+importance_vals <- importance(rf_model)
+print(importance_vals)
+
+#Plot importance
+varImpPlot(rf_model)
+importance_df <- as.data.frame(importance(rf_model))
+importance_df$Variable <- rownames(importance_df)
+plot_data <- importance_df %>%
+  select(Variable, MeanDecreaseAccuracy) %>%
+  arrange(MeanDecreaseAccuracy)
+plot_data$Variable <- factor(plot_data$Variable, levels = plot_data$Variable)
+
+#VarImp plot
+ggplot(plot_data, aes(x = MeanDecreaseAccuracy, y = Variable)) +
+  geom_col(fill = "steelblue") +
+  theme_minimal() +
+  labs(title = "Variable Importance",
+       x = "Importance (Gain)",
+       y = "Variable") +
+  theme(axis.text.y = element_text(size = 10),
+        axis.title.y = element_text(size = 12),
+        axis.title.x = element_text(size = 12),
+        plot.title = element_text(hjust = 0.5, size = 14))
+
+```
+
+Manual data entry for specialized graphics
+```{r}
+performance_data <- data.frame(
+  Model = rep(c("Decision Trees", "Random Forest", "KNN", "SVM"), each = 8),
+  County = rep(c("Los Angeles", "Riverside"), times = 16),
+  Metric = rep(c("Accuracy", "Precision", "Recall", "F1-score"), times = 8),
+  Value = c(
+    0.846, 0.853, 0.833, 0.843,  # Dt LA
+    0.964, 0.952, 0.977, 0.964,   # Rf LA
+    0.863, 0.807, 0.952, 0.874,   # KNN LA
+    0.812, 0.782, 0.858, 0.818,   # SVM LA
+    0.794, 0.804, 0.74, 0.772,  # Dt Riverside
+    0.91, 0.888, 0.926, 0.907,     # Rf Riverside
+    0.784, 0.733, 0.853, 0.788,   # KNN Riverside
+    0.77, 0.828, 0.645, 0.726    # SVM Riverside
+  )
+)
+#bar plot
+ggplot(performance_data, aes(x = Metric, y = Value, fill = Model)) +
+  geom_bar(stat = "identity", position = position_dodge()) +
+  facet_wrap(~ County) +
+  labs(title = "Model Performance Comparison",
+       y = "Value",
+       x = "Performance Metric") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+```
+
+```{r}
+#additional variables
+unique_coordinatesla_balanced <- balanced_data %>%
+  distinct(matched_lat, matched_lon)
+
+balanced_data$DATE <- as.Date(balanced_data$DATE)
+
+#function to convert date to season
+get_season <- function(date) {
+  month <- month(date)
+  if (month %in% c(12, 1, 2)) {
+    return("winter")
+  } else if (month %in% c(3, 4, 5)) {
+    return("spring")
+  } else if (month %in% c(6, 7, 8)) {
+    return("summer")
+  } else {
+    return("fall")
+  }
+}
+
+#apply the function
+balanced_data <- balanced_data %>%
+  mutate(season = sapply(DATE, get_season))
+
+#Define lookup table for coordinates and area names
+coordinate_to_area <- data.frame(
+  matched_lat = c(34.05, 34.25, 33.95, 34.35, 34.65, 34.15, 34.15, 34.55, 34.35, 34.65,
+                  34.35, 34.15, 34.05, 34.15, 34.35, 34.15, 33.75, 33.75, 33.95, 33.85,
+                  34.45, 34.25, 33.75, 34.55, 34.45, 34.25, 34.65, 34.45, 33.85, 33.85,
+                  34.15, 34.45, 34.15, 33.95, 33.85, 34.75, 34.45, 34.45, 33.95, 34.05,
+                  34.55, 33.95, 34.15, 34.25, 34.05, 34.75, 33.95, 34.55, 34.25, 34.75,
+                  34.25, 34.15, 34.25, 33.75, 34.55, 34.15, 33.75, 34.75, 34.75, 34.35,
+                  33.85, 34.05, 34.15, 34.05, 34.05),
+  matched_lon = c(-118.45, -118.35, -118.05, -117.65, -118.15, -118.45, -118.75, -118.45, -118.55, -117.85,
+                  -117.85, -118.15, -118.25, -118.35, -118.05, -117.85, -118.35, -118.25, -117.95, -117.95,
+                  -118.65, -118.55, -117.75, -118.55, -118.55, -118.15, -118.05, -117.85, -118.15, -117.65,
+                  -117.95, -118.25, -117.75, -118.35, -118.05, -118.25, -118.15, -118.45, -117.65, -118.15,
+                  -118.05, -118.15, -118.25, -118.45, -117.75, -118.45, -118.65, -117.85, -118.35, -117.85,
+                  -118.05, -118.65, -118.55, -118.75, -118.05, -118.45, -117.85, -118.65, -118.05, -118.45,
+                  -118.35, -118.55, -118.55, -118.45, -118.55),
+  location = c("South El Monte", "Shadow Hills", "South Whittier", "Angeles National Forest", "Lancaster", "Sherman Oaks",
+               "Agoura Hills", "Santa Clarita", "Santa Clarita", "Santa Clarita", "Angeles National Forest", "Pasadena",
+               "Downtown Los Angeles", "Burbank", "Angeles National Forest", "Glendora", "Palos Verdes", "Long Beach",
+               "La Habra", "Anaheim", "Santa Clarita", "Northridge", "Orange", "Santa Clarita", "Valencia",
+               "Angeles National Forest", "Palmdale", "Valyermo", "Lakewood", "Corona", "Monrovia", "Acton", "La Verne",
+               "Inglewood", "La Palma", "Lancaster", "Acton", "Santa Clarita", "Chino", "Monterey Park", "Palmdale",
+               "Downey", "Glendale", "Arleta", "Pomona", "Lancaster", "Santa Monica", "Castaic", "San Gabriel Mountains",
+               "Lancaster", "San Gabriel Mountains", "Calabasas", "San Gabriel Mountains", "La Crescenta", "San Pedro",
+               "Llano", "Arcadia", "Cleveland National Forest", "Lake Hughes", "Lancaster", "Angeles National Forest",
+               "Torrance", "Walnut", "Tarzana", "Pacific Palisades")
+)
+
+balanced_data <- balanced_data %>%
+  left_join(coordinate_to_area, by = c("matched_lat", "matched_lon"))
+balanced_data$location[is.na(balanced_data$location)] <- "Unknown"
+newbalanced_data <- balanced_data %>%
+  select(DATE, matched_lat, matched_lon, AWND_sqrt, PRCP_sqrt, NDVI_yeojohnson, fire, season, location)
+print(newbalanced_data)
+
+```
+```{r}
+locations <- read.csv("coord_location.csv")
+newbalanced_data <- balanced_data %>%
+  select(DATE, matched_lat, matched_lon, AWND_sqrt, PRCP_sqrt, TAVG, NDVI_yeojohnson, fire, season, location.y)
+print(newbalanced_data)
+```
