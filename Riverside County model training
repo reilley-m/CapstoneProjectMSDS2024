@@ -1,0 +1,429 @@
+```{r load packages, include=FALSE}
+library(dplyr)
+library(ggplot2)
+library(maps)
+library(ggmap)
+library(tigris)
+library(sf)
+library(lubridate)
+library(geosphere)
+library(tidyr)
+library(units)
+library(mice)
+library(caret)
+library(smotefamily)
+library(e1071)
+library(nnet)
+library(class)
+library(car)
+library(rpart)
+library(randomForest)
+library(zoo)
+library(ROSE)
+library(gridExtra)
+library(pROC)
+
+```
+```{r setup, include=FALSE}
+finalrv_dataset_w_frp <- read.csv("finalrv_dataset_w_frp.csv")
+```
+
+```{r}
+finalrv_dataset_w_frp <- finalrv_dataset_w_frp %>%
+  mutate(latitude = round(latitude, 2),
+         longitude = round(longitude, 2))
+```
+load ndvi data
+
+```{r cars}
+r1_2016_NDVI_MODIS <- read.csv("2016_NDVI_MODIS.csv")
+r1_2017_NDVI_MODIS <- read.csv("2017_NDVI_MODIS.csv")
+r1_2018_NDVI_MODIS <- read.csv("2018_NDVI_MODIS.csv")
+r1_2019_NDVI_MODIS <- read.csv("2019_NDVI_MODIS.csv")
+r1_2020_NDVI_MODIS <- read.csv("2020_NDVI_MODIS.csv")
+r2_2016_NDVI_MODIS <- read.csv("r2_2016_NDVI_MODIS.csv")
+r2_2017_NDVI_MODIS <- read.csv("r2_2017_NDVI_MODIS.csv")
+r2_2018_NDVI_MODIS <- read.csv("r2_2018_NDVI_MODIS.csv")
+r2_2019_NDVI_MODIS <- read.csv("r2_2019_NDVI_MODIS.csv")
+r2_2020_NDVI_MODIS <- read.csv("r2_2020_NDVI_MODIS.csv")
+r3_2016_NDVI_MODIS <- read.csv("r3_2016_NDVI_MODIS.csv")
+r3_2017_NDVI_MODIS <- read.csv("r3_2017_NDVI_MODIS.csv")
+r3_2018_NDVI_MODIS <- read.csv("r3_2018_NDVI_MODIS.csv")
+r3_2019_NDVI_MODIS <- read.csv("r3_2019_NDVI_MODIS.csv")
+r3_2020_NDVI_MODIS <- read.csv("r3_2020_NDVI_MODIS.csv")
+r4_2016_NDVI_MODIS <- read.csv("r4_2016_NDVI_MODIS.csv")
+r4_2017_NDVI_MODIS <- read.csv("r4_2017_NDVI_MODIS.csv")
+r4_2018_NDVI_MODIS <- read.csv("r4_2018_NDVI_MODIS.csv")
+r4_2019_NDVI_MODIS <- read.csv("r4_2019_NDVI_MODIS.csv")
+r4_2020_NDVI_MODIS <- read.csv("r4_2020_NDVI_MODIS.csv")
+```
+
+```{r}
+#df with the coordinates
+coordinates <- data.frame(
+  system.index = 0:65,
+  latitude = c(rep(33.45, 34), rep(33.55, 32)),
+  longitude = c(
+    -117.8, -117.7, -117.6, -117.5, -117.4, -117.3, -117.2, -117.1, -117.0, -116.9, -116.8, -116.7, -116.6, -116.5, -116.4, -116.3, -116.2, -116.1, -116.0, -115.9, -115.8, -115.7, -115.6, -115.5, -115.4, -115.3, -115.2, -115.1, -115.0, -114.9, -114.8, -114.7, -114.6, -114.5,
+    -117.8, -117.7, -117.6, -117.5, -117.4, -117.3, -117.2, -117.1, -117.0, -116.9, -116.8, -116.7, -116.6, -116.5, -116.4, -116.3, -116.2, -116.1, -116.0, -115.9, -115.8, -115.7, -115.6, -115.5, -115.4, -115.3, -115.2, -115.1, -115.0, -114.9, -114.8, -114.7
+  )
+)
+
+#merge the coordinates with df
+r1_2016_NDVI_MODIS <- merge(r1_2016_NDVI_MODIS, coordinates, by = "system.index")
+
+
+```
+
+```{r}
+r1_2017_NDVI_MODIS$system.index <- as.integer(sub("^[0-9]+_", "", r1_2017_NDVI_MODIS$system.index))
+r1_2018_NDVI_MODIS$system.index <- as.integer(sub("^[0-9]+_", "", r1_2018_NDVI_MODIS$system.index))
+r1_2019_NDVI_MODIS$system.index <- as.integer(sub("^[0-9]+_", "", r1_2019_NDVI_MODIS$system.index))
+r1_2020_NDVI_MODIS$system.index <- as.integer(sub("^[0-9]+_", "", r1_2020_NDVI_MODIS$system.index))
+
+r1_2017_NDVI_MODIS <- merge(r1_2017_NDVI_MODIS, coordinates, by = "system.index")
+r1_2018_NDVI_MODIS <- merge(r1_2018_NDVI_MODIS, coordinates, by = "system.index")
+r1_2019_NDVI_MODIS <- merge(r1_2019_NDVI_MODIS, coordinates, by = "system.index")
+r1_2020_NDVI_MODIS <- merge(r1_2020_NDVI_MODIS, coordinates, by = "system.index")
+```
+```{r}
+r1_2016_NDVI_MODIS <- r1_2016_NDVI_MODIS %>%
+  rename(Latitude = latitude, Longitude = longitude)
+r1_2017_NDVI_MODIS <- r1_2017_NDVI_MODIS %>%
+  rename(Latitude = latitude, Longitude = longitude)
+r1_2018_NDVI_MODIS <- r1_2018_NDVI_MODIS %>%
+  rename(Latitude = latitude, Longitude = longitude)
+r1_2019_NDVI_MODIS <- r1_2019_NDVI_MODIS %>%
+  rename(Latitude = latitude, Longitude = longitude)
+r1_2020_NDVI_MODIS <- r1_2020_NDVI_MODIS %>%
+  rename(Latitude = latitude, Longitude = longitude)
+```
+```{r}
+r1_2016_NDVI_MODIS$system.index <- as.character(r1_2016_NDVI_MODIS$system.index)
+r1_2017_NDVI_MODIS$system.index <- as.character(r1_2017_NDVI_MODIS$system.index)
+r1_2018_NDVI_MODIS$system.index <- as.character(r1_2018_NDVI_MODIS$system.index)
+r1_2019_NDVI_MODIS$system.index <- as.character(r1_2019_NDVI_MODIS$system.index)
+r1_2020_NDVI_MODIS$system.index <- as.character(r1_2020_NDVI_MODIS$system.index)
+```
+
+```{r}
+#combine all
+all_rv_ndvi_data <- bind_rows(r1_2016_NDVI_MODIS, r1_2017_NDVI_MODIS, r1_2018_NDVI_MODIS, r1_2019_NDVI_MODIS, r1_2020_NDVI_MODIS,
+                      r2_2016_NDVI_MODIS, r2_2017_NDVI_MODIS, r2_2018_NDVI_MODIS, r2_2019_NDVI_MODIS, r2_2020_NDVI_MODIS,
+                      r3_2016_NDVI_MODIS, r3_2017_NDVI_MODIS, r3_2018_NDVI_MODIS, r3_2019_NDVI_MODIS, r3_2020_NDVI_MODIS,
+                      r4_2016_NDVI_MODIS, r4_2017_NDVI_MODIS, r4_2018_NDVI_MODIS, r4_2019_NDVI_MODIS, r4_2020_NDVI_MODIS)
+
+```
+
+```{r}
+#ensure data types
+all_rv_ndvi_data$Latitude <- as.numeric(all_rv_ndvi_data$Latitude)
+all_rv_ndvi_data$Longitude <- as.numeric(all_rv_ndvi_data$Longitude)
+all_rv_ndvi_data$Date <- as.Date(all_rv_ndvi_data$Date)
+str(all_rv_ndvi_data)
+#IMpute misssing data
+imputed_data <- mice(all_rv_ndvi_data[, c("Latitude", "Longitude", "Date", "NDVI")], m = 1, method = "pmm")
+all_rv_ndvi_data_imputed <- complete(imputed_data, 1)
+```
+```{r}
+#Correct NDVI with updated calculation
+all_rv_ndvi_data_imputed$NDVI <- all_rv_ndvi_data_imputed$NDVI * 0.0001
+```
+```{r}
+all_rv_ndvi_data_imputed <- all_rv_ndvi_data_imputed %>%
+  rename(latitude = Latitude, longitude = Longitude)
+```
+
+```{r}
+#Col names
+colnames(finalrv_dataset_w_frp)[which(names(finalrv_dataset_w_frp) == "latitude")] <- "Latitude"
+colnames(finalrv_dataset_w_frp)[which(names(finalrv_dataset_w_frp) == "longitude")] <- "Longitude"
+colnames(finalrv_dataset_w_frp)[which(names(finalrv_dataset_w_frp) == "DATE")] <- "Date"
+colnames(all_rv_ndvi_data_imputed)[which(names(all_rv_ndvi_data_imputed) == "latitude")] <- "Latitude"
+colnames(all_rv_ndvi_data_imputed)[which(names(all_rv_ndvi_data_imputed) == "longitude")] <- "Longitude"
+colnames(all_rv_ndvi_data_imputed)[which(names(all_rv_ndvi_data_imputed) == "DATE")] <- "Date"
+
+#Date conversion
+finalrv_dataset_w_frp$Date <- as.Date(finalrv_dataset_w_frp$Date)
+all_rv_ndvi_data_imputed$Date <- as.Date(all_rv_ndvi_data_imputed$Date)
+
+#coord conversion
+finalrv_dataset_w_frp$Latitude <- as.numeric(finalrv_dataset_w_frp$Latitude)
+finalrv_dataset_w_frp$Longitude <- as.numeric(finalrv_dataset_w_frp$Longitude)
+all_rv_ndvi_data_imputed$Latitude <- as.numeric(all_rv_ndvi_data_imputed$Latitude)
+all_rv_ndvi_data_imputed$Longitude <- as.numeric(all_rv_ndvi_data_imputed$Longitude)
+#Left join to merge all data
+combined_data <- left_join(finalrv_dataset_w_frp, all_rv_ndvi_data_imputed, by = c("Latitude", "Longitude", "Date"))
+head(combined_data)
+
+```
+
+Last Observation Carried Forward
+```{r}
+combined_data2rv <- combined_data %>%
+  arrange(Latitude, Longitude, Date) %>%
+  group_by(Latitude, Longitude) %>%
+  mutate(NDVI = na.locf(NDVI, na.rm = FALSE)) %>%
+  ungroup()
+```
+
+LOOK FOR NA
+```{r}
+na_summary <- combined_data2rv %>%
+  summarise_all(~ sum(is.na(.)))
+print("Summary of NA values in each column:")
+print(na_summary)
+
+```
+
+```{r}
+#filter for fire and check na
+fire_datarv <- combined_data2rv %>% filter(fire == "fire")
+na_summary_fire <- fire_datarv %>%
+  summarise_all(~ sum(is.na(.)))
+print("NA values where fire = 'fire':")
+print(na_summary_fire)
+
+```
+
+```{r}
+imputed_data <- mice(combined_data2rv, m = 5, method = 'pmm', maxit = 5)
+complete_datarv_imp <- complete(imputed_data)
+#check NAs
+na_summary_tot <- complete_datarv_imp %>%
+  summarise_all(~ sum(is.na(.)))
+print(na_summary_tot)
+
+```
+
+```{r}
+
+#Create plots to check data distribution
+variables <- c("AWND", "PRCP", "TAVG", "NDVI")
+for (var in variables) {
+  p <- ggplot(complete_datarv_imp, aes_string(x = var)) +
+    geom_histogram(aes(y = ..density..), binwidth = 1, color = "black", fill = "blue", alpha = 0.7) +
+    geom_density(color = "red", size = 1) +
+    labs(title = paste("Histogram and Density Plot of", var), x = var, y = "Density")
+  print(p)
+}
+```
+```{r}
+#Sqrt trans
+RV_data_prepared <- complete_datarv_imp %>%
+  mutate(
+    AWND_sqrt = sqrt(AWND),
+    PRCP_sqrt = sqrt(PRCP),
+    TAVG_sqrt = sqrt(TAVG),
+  )
+```
+
+```{r}
+RV_data_prepared <- RV_data_prepared %>%
+  mutate(Date = as.Date(Date))
+RV_data_prepared$fire <- as.factor(RV_data_prepared$fire)
+summary(RV_data_prepared)
+```
+
+```{r}
+RV_data_prepared2 <- RV_data_prepared %>%
+  select(Date, Latitude, Longitude, AWND_sqrt, PRCP_sqrt, TAVG_sqrt, NDVI, fire)
+balancedrv_data <- ovun.sample(fire ~ ., data = RV_data_prepared2, method = "both", N = 2 * table(RV_data_prepared2$fire)[1], seed = 1)$data
+
+table(balancedrv_data$fire)
+```
+```{r}
+brv_data <- balancedrv_data %>%
+  select(AWND_sqrt, PRCP_sqrt, TAVG_sqrt, NDVI, fire)
+brv_data$fire <- ifelse(brv_data$fire == "no_fire", 0, 1)
+str(brv_data)
+write.csv(brv_data, "brv_data.csv", row.names = FALSE)
+```
+
+
+```{r}
+#train and test
+set.seed(123)
+trainIndex <- createDataPartition(brv_data$fire, p = .8, 
+                                  list = FALSE, 
+                                  times = 1)
+trainrv_data <- brv_data[trainIndex,]
+testrv_data  <- brv_data[-trainIndex,]
+
+trainrv_data$fire <- as.factor(trainrv_data$fire)
+testrv_data$fire <- as.factor(testrv_data$fire)
+
+# Check levels
+levels(trainrv_data$fire)
+levels(testrv_data$fire)
+```
+
+
+
+
+
+
+
+```{r}
+# 1. Naive Bayes
+#naive_model <- naiveBayes(fire ~ ., data = trainrv_data)
+#naive_pred <- predict(naive_model, testrv_data)
+#naive_pred <- factor(naive_pred, levels = levels(testrv_data$fire))
+#naive_conf <- confusionMatrix(naive_pred, testrv_data$fire, positive = "1")
+#print(naive_conf)
+
+# 2. ANN
+#ann_model <- nnet(fire ~ ., data = trainrv_data, size = 10, maxit = 200)
+#ann_pred <- predict(ann_model, testrv_data, type = "class")
+#ann_pred <- factor(ann_pred, levels = levels(testrv_data$fire))
+#ann_conf <- confusionMatrix(ann_pred, testrv_data$fire, positive = "1")
+#print(ann_conf)
+
+# 3. SVM
+svm_model <- svm(fire ~ ., data = trainrv_data, probability = TRUE)
+svm_pred <- predict(svm_model, testrv_data)
+svm_pred <- factor(svm_pred, levels = levels(testrv_data$fire))
+svm_conf <- confusionMatrix(svm_pred, testrv_data$fire, positive = "1")
+print(svm_conf)
+
+# 4. KNN
+knn_pred <- knn(train = trainrv_data[, -which(names(trainrv_data) == "fire")],
+                test = testrv_data[, -which(names(testrv_data) == "fire")],
+                cl = trainrv_data$fire, k = 5)
+knn_pred <- factor(knn_pred, levels = levels(testrv_data$fire))
+knn_conf <- confusionMatrix(knn_pred, testrv_data$fire, positive = "1")
+print(knn_conf)
+
+# 5. Random Forest
+rf_model <- randomForest(fire ~ ., data = trainrv_data, importance = TRUE, ntree = 500)
+predictions <- predict(rf_model, newdata = testrv_data)
+rf_conf <- confusionMatrix(predictions, testrv_data$fire, positive = "1")
+print(rf_conf)
+
+# 6. Decision Tree
+dt_model <- rpart(fire ~ ., data = trainrv_data, method = "class")
+predictions <- predict(dt_model, newdata = testrv_data, type = "class")
+dt_conf <- confusionMatrix(predictions, testrv_data$fire, positive = "1")
+print(dt_conf)
+```
+
+PERFORMANCE METRICS
+```{r}
+extract_metrics <- function(conf_matrix) {
+  data.frame(
+    Accuracy = conf_matrix$overall['Accuracy'],
+    Precision = conf_matrix$byClass['Pos Pred Value'],
+    Recall = conf_matrix$byClass['Sensitivity'],
+    F1 = 2 * (conf_matrix$byClass['Pos Pred Value'] * conf_matrix$byClass['Sensitivity']) / 
+         (conf_matrix$byClass['Pos Pred Value'] + conf_matrix$byClass['Sensitivity'])
+  )
+}
+
+
+#SVM Performance
+svm_metrics <- extract_metrics(svm_conf)
+svm_metrics$Model <- "SVM" 
+
+#KNN Performance
+knn_metrics <- extract_metrics(knn_conf)
+knn_metrics$Model <- "KNN"
+
+#RF Performance
+rf_metrics <- extract_metrics(rf_conf)
+rf_metrics$Model <- "RF"
+
+#DT Performance
+dt_metrics <- extract_metrics(dt_conf)
+dt_metrics$Model <- "DT"
+
+#compare
+model_comparison <- rbind(svm_metrics, knn_metrics, rf_metrics, dt_metrics)
+print(model_comparison)
+```
+
+```{r}
+# train Rf model
+rf_model <- randomForest(fire ~ ., data = trainrv_data, importance = TRUE, ntree = 500)
+rf_probs <- predict(rf_model, newdata = testrv_data, type = "prob")[, "1"]
+#calculate AUC-ROC
+roc_rf <- roc(testrv_data$fire, rf_probs, levels = c("0", "1"), direction = "<")
+auc_rf <- auc(roc_rf)
+print(paste("AUC-ROC for RF:", auc_rf))
+#plot
+plot(roc_rf, main = paste("AUC-ROC Curve for RF (AUC =", round(auc_rf, 2), ")"))
+
+
+# train KNN model
+knn_pred <- knn(train = trainrv_data[, -which(names(trainrv_data) == "fire")],
+                test = testrv_data[, -which(names(testrv_data) == "fire")],
+                cl = trainrv_data$fire, k = 5, prob = TRUE)
+knn_probs <- ifelse(knn_pred == "1", attr(knn_pred, "prob"), 1 - attr(knn_pred, "prob"))
+
+#calculate AUC-ROC
+roc_knn <- roc(testrv_data$fire, knn_probs, levels = c("0", "1"), direction = "<")
+auc_knn <- auc(roc_knn)
+print(paste("AUC-ROC for KNN:", auc_knn))
+
+#plot
+plot(roc_knn, main = paste("AUC-ROC Curve for KNN (AUC =", round(auc_knn, 2), ")"))
+
+
+#train SVM model
+svm_model <- svm(fire ~ ., data = trainrv_data, probability = TRUE)
+svm_probs <- attr(predict(svm_model, testrv_data, probability = TRUE), "probabilities")[, "1"]
+
+#Calculate AUC-ROC
+roc_svm <- roc(testrv_data$fire, svm_probs, levels = c("0", "1"), direction = "<")
+auc_svm <- auc(roc_svm)
+print(paste("AUC-ROC for SVM:", auc_svm))
+
+#plot
+plot(roc_svm, main = paste("AUC-ROC Curve for SVM (AUC =", round(auc_svm, 2), ")"))
+
+
+
+#train dt model
+dt_model <- rpart(fire ~ ., data = trainrv_data, method = "class")
+dt_probs <- predict(dt_model, newdata = testrv_data, type = "prob")[, "1"]
+
+#calculate AUC-ROC
+roc_dt <- roc(testrv_data$fire, dt_probs, levels = c("0", "1"), direction = "<")
+auc_dt <- auc(roc_dt)
+print(paste("AUC-ROC for DT:", auc_dt))
+
+#plot
+plot(roc_dt, main = paste("AUC-ROC Curve for DT (AUC =", round(auc_dt, 2), ")"))
+
+```
+
+```{r}
+#variable imp
+importance_vals <- importance(rf_model)
+print(importance_vals)
+
+
+#plot
+varImpPlot(rf_model)
+importance_df <- as.data.frame(importance(rf_model))
+importance_df$Variable <- rownames(importance_df)
+
+
+
+plot_data <- importance_df %>%
+  select(Variable, MeanDecreaseAccuracy) %>%
+  arrange(MeanDecreaseAccuracy)
+
+
+plot_data$Variable <- factor(plot_data$Variable, levels = plot_data$Variable)
+
+ggplot(plot_data, aes(x = MeanDecreaseAccuracy, y = Variable)) +
+  geom_col(fill = "steelblue") +
+  theme_minimal() +
+  labs(title = "Variable Importance",
+       x = "Importance (Gain)",
+       y = "Variable") +
+  theme(axis.text.y = element_text(size = 10),
+        axis.title.y = element_text(size = 12),
+        axis.title.x = element_text(size = 12),
+        plot.title = element_text(hjust = 0.5, size = 14))
+```
