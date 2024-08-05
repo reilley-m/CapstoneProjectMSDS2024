@@ -1,0 +1,293 @@
+```{r}
+#Load Packages
+library(dplyr)
+library(ggplot2)
+library(maps)
+library(ggmap)
+library(tigris)
+library(sf)
+library(lubridate)
+```
+LOS ANGELES COUNTY
+```{r setup, include=FALSE}
+wildfire <- read.csv("la_fire_data.csv")
+dten_14 <- read.csv("los angeles 1.1.10 - 7.31.14.csv")
+d14_18 <- read.csv("los angeles 8.1.14 - 8.31.18.csv")
+d18_20 <- read.csv("Los Angeles 9.1.18 - 12.31.2020.csv")
+LAwildfire_filtered <- wildfire %>%
+  filter(year >= 2013 & year <= 2020)
+head(LAwildfire_filtered)
+
+unique_names <- unique(d18_20$NAME)
+print(unique_names)
+
+unique_names2 <- unique(d14_18$NAME)
+print(unique_names2)
+
+unique_names3 <- unique(dten_14$NAME)
+print(unique_names3)
+
+la_county <- counties(state = "CA", cb = TRUE) %>%
+  filter(NAME == "Los Angeles") %>%
+  st_as_sf()
+ggplot() +
+  geom_sf(data = la_county, fill = "white", color = "black") +
+  geom_point(data = LAwildfire_filtered, aes(x = longitude, y = latitude), color = "red", size = 2) +
+  labs(title = "Wildfire Coordinates on Los Angeles County Map", x = "Longitude", y = "Latitude") +
+  theme_minimal()
+
+unique_names4 <- unique(unique_names, unique_names2)
+```
+
+
+
+RIVERSIDE COUNTY
+```{r}
+Riverside_wildfire <- read.csv("riverside_fire_data.csv")
+r14_20 <- read.csv("Riverside 8.1.14 - 12.31.20.csv")
+rten_14<- read.csv("Riverside 1.13.10 - 7.31.14.csv")
+
+RIVERwildfire_filtered <- Riverside_wildfire %>%
+  filter(year >= 2013 & year <= 2020)
+
+#Get shapefile for Riverside County
+river_county <- counties(state = "CA", cb = TRUE) %>%
+  filter(NAME == "Riverside") %>%
+  st_as_sf()
+
+ggplot() +
+  geom_sf(data = river_county, fill = "white", color = "black") +
+  geom_point(data = RIVERwildfire_filtered, aes(x = longitude, y = latitude), color = "red", size = 2) +
+  labs(title = "Wildfire Coordinates on Riverside County Map", x = "Longitude", y = "Latitude") +
+  theme_minimal()
+```
+
+
+San Diego
+```{r}
+SanDiego_wildfire <- read.csv("san_diego_fire_data.csv")
+sd10_14 <- read.csv("San Diego 1.1.10 - 7.26.14.csv")
+sd14_18<- read.csv("San Diego 8.1.14 - 8.31.18.csv")
+sd18_20<- read.csv("San Diego 9.1.18 - 12.31.20.csv")
+
+SDwildfire_filtered <- SanDiego_wildfire %>%
+  filter(year >= 2013 & year <= 2020)
+
+#Get shapefile for San Diego County
+sd_county <- counties(state = "CA", cb = TRUE) %>%
+  filter(NAME == "San Diego") %>%
+  st_as_sf()
+
+ggplot() +
+  geom_sf(data = sd_county, fill = "white", color = "black") +
+  geom_point(data = SDwildfire_filtered, aes(x = longitude, y = latitude), color = "red", size = 2) +
+  labs(title = "Wildfire Coordinates on San Diego County Map", x = "Longitude", y = "Latitude") +
+  theme_minimal()
+```
+
+
+
+San Bernadino COUNTY
+```{r}
+SanBernadino_wildfire <- read.csv("san_bernardino_fire_data.csv")
+sb10_15 <- read.csv("San Bernadino 1.1.10 - 7.31.15.csv")
+sb15_20<- read.csv("San Bernadino 8.1.15 - 12.31.2020.csv")
+
+SBwildfire_filtered <- SanBernadino_wildfire %>%
+  filter(year >= 2013 & year <= 2020)
+
+
+head(SBwildfire_filtered)
+
+#Get shapefile for San Bernadino County
+sb_county <- counties(state = "CA", cb = TRUE) %>%
+  filter(NAME == "San Bernardino") %>%
+  st_as_sf()
+
+ggplot() +
+  geom_sf(data = sb_county, fill = "white", color = "black") +
+  geom_point(data = SBwildfire_filtered, aes(x = longitude, y = latitude), color = "red", size = 2) +
+  labs(title = "Wildfire Coordinates on San Bernadino County Map", x = "Longitude", y = "Latitude") +
+  theme_minimal()
+```
+
+```{r}
+counties <- counties(state = "CA", cb = TRUE)
+```
+
+ALL DATA COMPARISON
+```{r}
+LAwildfire_filtered$county <- "Los Angeles"
+RIVERwildfire_filtered$county <- "Riverside"
+SBwildfire_filtered$county <- "San Bernardino"
+SDwildfire_filtered$county <- "San Diego"
+
+#Combine all datasets
+combined_data <- bind_rows(LAwildfire_filtered, RIVERwildfire_filtered, SBwildfire_filtered, SDwildfire_filtered)
+
+#Aggreg by county
+aggregated_data <- combined_data %>%
+  group_by(county) %>%
+  summarise(
+    total_fires = n(),
+    avg_fire_radiative_power = mean(frp, na.rm = TRUE),
+    fires_per_year = n() / length(unique(year))
+  )
+
+print(aggregated_data)
+
+#Bar chart for total fires and average fire radiative power
+ggplot(aggregated_data, aes(x = county)) +
+  geom_bar(aes(y = total_fires), stat = "identity", fill = "steelblue") +
+  geom_point(aes(y = avg_fire_radiative_power * 100), color = "red", size = 3) +  
+  scale_y_continuous(
+    name = "Total Fires",
+    sec.axis = sec_axis(~ . / 100, name = "Avg Fire Radiative Power")
+  ) +
+  labs(title = "Wildfire Risk Comparison by County", x = "County") +
+  theme_minimal()
+
+#Get shapefile for counties
+ca_counties <- counties(state = "CA", cb = TRUE) %>%
+  st_as_sf()
+relevant_counties <- ca_counties %>%
+  filter(NAME %in% c("Los Angeles", "Riverside", "San Bernardino", "San Diego"))
+
+# Plot the map and fire locations
+ggplot() +
+  geom_sf(data = relevant_counties, fill = "white", color = "black") +
+  geom_point(data = combined_data, aes(x = longitude, y = latitude, color = county), size = 2) +
+  labs(title = "Wildfire Locations in Southern California", x = "Longitude", y = "Latitude") +
+  theme_minimal()
+```
+
+
+NOW WE ARE DOING EDA FOR LOS ANGELES AND RIVERSIDE
+```{r}
+LAweather <- bind_rows(dten_14, d14_18, d18_20)
+RVweather <- bind_rows(rten_14, r14_20)
+```
+```{r}
+process_weather_data <- function(weather_data) {
+  weather_data %>%
+    mutate(DATE = mdy(DATE)) %>%
+    mutate(
+      month = month(DATE),
+      day = day(DATE),
+      year = year(DATE)
+    ) %>%
+    #Filter dates before Jan 1 2013
+    filter(DATE >= as.Date("2013-01-01"))
+}
+
+# Process both LAweather and RVweather
+LAweather_processed <- process_weather_data(LAweather)
+RVweather_processed <- process_weather_data(RVweather)
+head(LAweather_processed)
+head(RVweather_processed)
+```
+
+```{r}
+# Count number of rows without missing data by year
+count_complete_cases_by_year <- LAweather_processed %>%
+  filter(complete.cases(.)) %>%
+  group_by(year) %>%
+  summarise(count = n())
+print(count_complete_cases_by_year)
+```
+
+```{r}
+#Count number of rows without missing data by year
+count_complete_cases_by_year <- RVweather_processed %>%
+  filter(complete.cases(.)) %>%
+  group_by(year) %>%
+  summarise(count = n())
+print(count_complete_cases_by_year)
+```
+
+```{r}
+LAcomplete_awnd_names <- LAweather_processed %>%
+  # filter for complete AWND values
+  filter(!is.na(AWND)) %>%
+  # select the NAME column
+  select(NAME, LATITUDE, LONGITUDE) %>%
+  # get unique values
+  distinct()
+print(LAcomplete_awnd_names)
+```
+```{r}
+ggplot() +
+  geom_sf(data = la_county, fill = "white", color = "black") +
+  geom_point(data = LAcomplete_awnd_names, aes(x = LONGITUDE, y = LATITUDE), color = "red", size = 2) +
+  labs(title = "Wildfire Coordinates on Los Angeles County Map", x = "Longitude", y = "Latitude") +
+  theme_minimal()
+```
+
+```{r}
+LAcomplete_awnd_names <- LAweather_processed %>%
+  # filter for complete AWND values
+  filter(!is.na(PRCP)) %>%
+  # select the NAME column
+  select(NAME, LATITUDE, LONGITUDE) %>%
+  # get unique values
+  distinct()
+print(LAcomplete_awnd_names)
+```
+
+```{r}
+LAcomplete_awnd_names <- LAweather_processed %>%
+  # filter for complete AWND values
+  filter(!is.na(TAVG)) %>%
+  # select the NAME column
+  select(NAME, LATITUDE, LONGITUDE) %>%
+  # get unique values
+  distinct()
+print(LAcomplete_awnd_names)
+```
+ADD OC data
+
+```{r}
+OCweather <- read.csv("OCdata.csv")
+OCweather <- OCweather %>%
+  mutate(DATE = ymd(DATE)) %>%
+  mutate(
+    year = year(DATE),
+    month = month(DATE),
+    day = day(DATE)
+  )
+#OCweather_processed <- process_weather_data(OCweather)
+LAweathercomplete <- bind_rows(LAweather_processed, OCweather)
+```
+
+```{r}
+write.csv(LAweathercomplete, "LAweathercomplete.csv", row.names = FALSE)
+write.csv(LAwildfire_filtered, "LAwildfire_filtered::.csv", row.names = FALSE)
+```
+
+RIVERSIDE DATA PREP
+```{r}
+river_county <- counties(state = "CA", cb = TRUE) %>%
+  filter(NAME == "Riverside") %>%
+  st_as_sf()
+ggplot() +
+  geom_sf(data = river_county, fill = "white", color = "black") +
+  geom_point(data = RVweathercomplete, aes(x = LONGITUDE, y = LATITUDE), color = "red", size = 2) +
+  labs(title = "Wildfire Coordinates on Riverside County Map", x = "Longitude", y = "Latitude") +
+  theme_minimal()
+```
+
+```{r}
+unique_names <- unique(RVweathercomplete$NAME)
+print(unique_names)
+```
+how many missing values for each variable?
+```{r}
+LAcomplete_awnd_names <- RVweathercomplete %>%
+  # filter for complete AWND values
+  filter(!is.na(AWND)) %>%
+  # select the NAME column
+  select(NAME, LATITUDE, LONGITUDE) %>%
+  # get unique values
+  distinct()
+print(LAcomplete_awnd_names)
+```
