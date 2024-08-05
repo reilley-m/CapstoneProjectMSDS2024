@@ -1,0 +1,237 @@
+```{r setup, include=FALSE}
+library(dplyr)
+library(ggplot2)
+library(maps)
+library(ggmap)
+library(tigris)
+library(geosphere)
+library(kableExtra)
+library(RColorBrewer)
+library(RColorBrewer)
+library(viridis)
+library(extrafont)
+```
+
+
+CREATE PLOT FOR PERFORMANCE SCORES
+```{r}
+#data
+data <- data.frame(
+  County = c("Los Angeles", "Los Angeles", "Los Angeles", "Los Angeles",
+             "Riverside", "Riverside", "Riverside", "Riverside"),
+  Method = c("Random Forest Classifier", "KNN", "Decision Trees", "SVM",
+             "Random Forest Classifier", "KNN", "Decision Trees", "SVM"),
+  AUCROC = c(0.99, 0.865, 0.883, 0.86, 0.959, 0.893, 0.829, 0.848),
+  F1_Score = c(0.964, 0.874, 0.843, 0.818, 0.911, 0.791, 0.768, 0.727)
+)
+#create and format the table
+kable(data, "html", col.names = c("County", "Method", "AUC-ROC", "F1 Score")) %>%
+  kable_styling("striped", full_width = F) %>%
+  pack_rows("Los Angeles", 1, 4) %>%
+  pack_rows("Riverside", 5, 8)
+save_kable(table_html, "table.html")
+webshot("table.html", "table.png")
+```
+
+
+```{r}
+data2 <- data.frame(
+  County = c("Los Angeles", "Los Angeles", "Los Angeles", "Los Angeles",
+             "Riverside", "Riverside", "Riverside", "Riverside"),
+  Variable = c("Average Wind Speed", "Precipitation", "Average Temperature", "NDVI",
+               "Average Wind Speed", "Precipitation", "Average Temperature", "NDVI"),
+  Gain_MDA = c(153, 19, 205, 217, 133, 30, 215, 203)
+)
+
+ggplot(data2, aes(x = Gain_MDA, y = Variable, fill = County)) +
+  geom_col(position = "dodge") +
+  theme_minimal() +
+  labs(title = "Variable Importance",
+       x = "Gain (MDA)",
+       y = "Variable",
+       fill = "County") +
+  theme(axis.text.y = element_text(size = 10),
+        axis.title.y = element_text(size = 12),
+        axis.title.x = element_text(size = 12),
+        plot.title = element_text(hjust = 0.5, size = 14))
+
+```
+```{r setup, include=FALSE}
+LA_data_comp <- read.csv("finalla_dataset_w_frp.csv")
+finalrv_dataset_w_frp <- read.csv("finalrv_dataset_w_frp.csv")
+```
+
+
+```{r cars}
+fire_countla <- sum(LA_data_comp$fire == "fire")
+fire_countrv <- sum(finalrv_dataset_w_frp$fire == "fire")
+```
+
+```{r pressure, echo=FALSE}
+LA <- LA_data_comp %>%
+  filter(fire == "fire") %>%
+  select(DATE, frp, matched_lat, matched_lon)
+```
+
+```{r}
+RV <- finalrv_dataset_w_frp %>%
+  filter(fire == "fire") %>%
+  select(DATE, frp, latitude, longitude)
+```
+
+```{r}
+#LA MAP OF FIRE
+LA_aggregated <- LA %>%
+  group_by(matched_lat, matched_lon) %>%
+  summarise(count = n()) %>%
+  ungroup()
+
+LA_clean <- LA_aggregated %>%
+  rename(latitude = matched_lat, longitude = matched_lon)
+```
+
+```{r}
+#Map using Google API
+register_google(key = "AIzaSyAT8bb3HoE9-zJysXUshA3eQ4vi1v3u_GA")
+la_map <- get_map(location = c(lon = -118.2437, lat = 34.0522), zoom = 9, maptype = "terrain", source = "google")
+
+ggmap(la_map) +
+  geom_point(data = LA_clean, aes(x = longitude, y = latitude, size = count, color = count), alpha = 0.7) +
+  scale_color_viridis_c(option = "plasma", name = "Fire Count") +
+  scale_size(range = c(3, 10), guide = "none") +
+  labs(title = "Fire Occurrences in Los Angeles County (2016-2020)", x = "Longitude", y = "Latitude") +
+  theme_minimal() +
+  theme(legend.position = "right")
+ggsave("LA_Fire_Occurrences_Map.png", width = 10, height = 8)
+
+```
+
+```{r}
+#RV MAP OF FIRE
+RV_aggregated <- RV %>%
+  group_by(latitude, longitude) %>%
+  summarise(count = n(), .groups = 'drop')
+
+```
+
+```{r}
+register_google(key = "AIzaSyAT8bb3HoE9-zJysXUshA3eQ4vi1v3u_GA")
+la_map <- get_map(location = c(lon = -116, lat = 33.9533), zoom = 8, maptype = "terrain", source = "google")
+
+ggmap(la_map) +
+  geom_point(data = RV_aggregated, aes(x = longitude, y = latitude, size = count, color = count), alpha = 0.7) +
+  scale_color_viridis_c(option = "plasma", name = "Fire Count") +
+  scale_size(range = c(3, 10), guide = "none") +
+  labs(title = "Fire Occurrences in Riverside County (2016-2020)", x = "Longitude", y = "Latitude") +
+  theme_minimal() +
+  theme(legend.position = "right")
+
+ggsave("RV_Fire_Occurrences_Map.png", width = 10, height = 8)
+
+```
+
+DATE Graphics
+
+```{r}
+#extract year and month
+LA <- LA %>%
+  mutate(DATE = as.Date(DATE, format = "%Y-%m-%d"),
+         year = format(DATE, "%Y"),
+         month = format(DATE, "%Y-%m"))
+
+RV <- RV %>%
+  mutate(DATE = as.Date(DATE, format = "%Y-%m-%d"),
+         year = format(DATE, "%Y"),
+         month = format(DATE, "%Y-%m"))
+
+#aggregate data by month
+LA_monthly <- LA %>%
+  group_by(month) %>%
+  summarise(fire_count = n(), .groups = 'drop') %>%
+  mutate(month = as.Date(paste0(month, "-01"), format = "%Y-%m-%d"))
+
+RV_monthly <- RV %>%
+  group_by(month) %>%
+  summarise(fire_count = n(), .groups = 'drop') %>%
+  mutate(month = as.Date(paste0(month, "-01"), format = "%Y-%m-%d"))
+
+```
+
+
+```{r}
+ggplot(LA_monthly, aes(x = month, y = fire_count)) +
+  geom_line(color = "blue") +
+  geom_point(color = "blue") +
+  labs(title = "Monthly Fire Occurrences in Los Angeles County (2016-2020)",
+       x = "Date",
+       y = "Number of Fires") +
+  scale_x_date(date_breaks = "3 months", date_labels = "%Y-%m") + 
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+ggsave("LA_Fire_Trend.png", width = 10, height = 8)
+
+```
+
+```{r}
+ggplot(RV_monthly, aes(x = month, y = fire_count)) +
+  geom_line(color = "red") +
+  geom_point(color = "red") +
+  labs(title = "Monthly Fire Occurrences in Riverside County (2016-2020)",
+       x = "Date",
+       y = "Number of Fires") +
+  scale_x_date(date_breaks = "3 months", date_labels = "%Y-%m") + 
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) 
+ggsave("RV_Fire_Trend.png", width = 10, height = 8)
+
+```
+
+```{r}
+LA_imp <- read.csv("b_data.csv")
+RV_imp <- read.csv("brv_data.csv")
+```
+```{r}
+str(LA_imp)
+```
+
+
+```{r}
+#Boxplots for NDVI and temp RIVERSIDE
+#NDVI
+ggplot(complete_datarv_imp, aes(x = factor(fire), y = NDVI)) +
+  geom_boxplot(fill = "blue", alpha = 0.5) +
+  labs(title = "NDVI Distribution by Fire Occurrence in Riverside",
+       x = "Fire Occurrence",
+       y = "NDVI") +
+  theme_minimal()
+ggsave("RV_NDVI_Fire_Scatter.png", plot = last_plot(), width = 10, height = 8)
+#Temperature
+ggplot(complete_datarv_imp, aes(x = factor(fire), y = TAVG)) +
+  geom_boxplot(fill = "red", alpha = 0.5) +
+  labs(title = "Temperature Distribution by Fire Occurrence in Riverside",
+       x = "Fire Occurrence",
+       y = "Average Temperature") +
+  theme_minimal()
+ggsave("RV_TAVG_Fire_Scatter.png", plot = last_plot(), width = 10, height = 8)
+```
+
+
+```{r}
+#Boxplots for NDVI and temp LOS ANGELES
+#NDVI
+ggplot(LA_no_NAT_filtered, aes(x = factor(fire), y = NDVI)) +
+  geom_boxplot(fill = "blue", alpha = 0.5) +
+  labs(title = "NDVI Distribution by Fire Occurrence in Los Angeles",
+       x = "Fire Occurrence",
+       y = "NDVI") +
+  theme_minimal()
+
+#Temperature
+ggplot(LA_no_NAT_filtered, aes(x = factor(fire), y = TAVG)) +
+  geom_boxplot(fill = "red", alpha = 0.5) +
+  labs(title = "Temperature Distribution by Fire Occurrence in Los Angeles",
+       x = "Fire Occurrence",
+       y = "Average Temperature") +
+  theme_minimal()
+```
