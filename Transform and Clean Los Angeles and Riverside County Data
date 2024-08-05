@@ -1,0 +1,718 @@
+load packages
+```{r setup, include=FALSE}
+library(dplyr)
+library(ggplot2)
+library(maps)
+library(ggmap)
+library(tigris)
+library(sf)
+library(lubridate)
+library(geosphere)
+library(tidyr)
+library(units)
+```
+
+
+Los Angeles Data Cleaning
+
+```{r cars}
+LAweather_raw <- read.csv("LAweathercomplete.csv")
+LAwildfire_raw <- read.csv("LAwildfire_filtered::.csv")
+```
+
+```{r}
+#get all station names and their coordinates
+LAcomplete_station_names <- LAweather_raw %>%
+  select(NAME, LATITUDE, LONGITUDE) %>%
+  distinct()
+print(LAcomplete_station_names)
+```
+
+TILE LOS ANGELES COUNTY
+Step 1: Filter and Visualize the Distribution of Weather Stations
+```{r}
+LAweather_filtered <- LAweather_raw %>%
+  filter(DATE >= as.Date("2016-01-01"))
+```
+
+```{r}
+LAwildfire_filtered <- LAwildfire_raw %>%
+  filter(acq_date >= as.Date("2016-01-01"))
+```
+
+
+```{r}
+la_county <- counties(state = "CA", cb = TRUE) %>%
+  filter(NAME == "Los Angeles") %>%
+  st_as_sf()
+weather_stations_sf <- st_as_sf(weather_stations, coords = c("LONGITUDE", "LATITUDE"), crs = 4326)
+la_bbox <- st_bbox(c(xmin = -119, xmax = -117, ymin = 33, ymax = 35), crs = st_crs(4326))
+la_grid <- st_make_grid(st_as_sfc(la_bbox), cellsize = 0.1, square = TRUE)
+la_grid_sf <- st_sf(geometry = la_grid)
+ggplot() +
+  geom_sf(data = la_county, fill = "white", color = "black") +
+  geom_sf(data = la_grid_sf, fill = NA, color = "gray") +
+  geom_sf(data = weather_stations_sf, color = "blue", size = 2) +
+  labs(title = "Weather Stations and Grid Tiles in Los Angeles County")
+LAwildfire_filtered_sf <- st_as_sf(LAwildfire_filtered, coords = c("longitude", "latitude"), crs = 4326)
+
+ggplot() +
+  geom_sf(data = la_county, fill = "white", color = "black") +
+  geom_sf(data = la_grid_sf, fill = NA, color = "gray") +
+  geom_sf(data = LAwildfire_filtered_sf, color = "red", size = 2) +
+  labs(title = "Wildfire Data and Grid Tiles in Los Angeles County")
+
+
+```
+```{r}
+
+#dataframe with weather station coordinates
+weather_stations <- data.frame(
+  NAME = c(
+    "BIG PINES CALIFORNIA, CA US", "TOPANGA PTRL STATION FC6, CA US", "PALMDALE, CA US", "LONG BEACH DAUGHERTY AIRPORT, CA US", 
+    "FAIRMONT, CA US", "CAMP 9 CALIFORNIA, CA US", "NORTHRIDGE CAL STATE, CA US", "GETTY CENTER, CA US", "PALOS VERDES ES FC43D, CA US", 
+    "LA CRESCENTA MONTROSE 3.9 NW, CA US", "HAWTHORNE MUNICIPAL AIRPORT, CA US", "LANCASTER 6.5 ENE, CA US", "VAN NUYS AIRPORT, CA US", 
+    "LOS ANGELES INTERNATIONAL AIRPORT, CA US", "SANTA FE DAM CALIFORNIA, CA US", "RANCHO PALOS VERDES 1.3 NNW, CA US", 
+    "LONG BEACH 1.1 SE, CA US", "RANCHO PALOS VERDES 2.0 NW, CA US", "TORRANCE AIRPORT, CA US", "PASADENA 2.0 SE, CA US", 
+    "SAUGUS CALIFORNIA, CA US", "WARM SPRINGS CALIFORNIA, CA US", "CULVER CITY, CA US", "SAN DIMAS FIRE FC 95, CA US", 
+    "LITTLE TUJUNGA CALIFORNIA, CA US", "BIG TUJUNGA DAM FC46, CA US", "PEARBLOSSOM, CA US", "SAN GABRIEL FIRE DEPARTMENT, CA US", 
+    "TORRANCE 0.7 E, CA US", "GLENDALE 2.4 WSW, CA US", "PASADENA 1.8 E, CA US", "MALIBU HILLS CALIFORNIA, CA US", 
+    "SAN FERNANDO 4.2 E, CA US", "MONTE NIDO 0.2 SSW, CA US", "POPPY PARK CALIFORNIA, CA US", "SHERMAN OAKS 1.7 ENE, CA US", 
+    "MILL CREEK ANF CALIFORNIA, CA US", "SANTA MONICA 1.3 NNE, CA US", "ALTADENA 0.7 ESE, CA US", "CULVER CITY 1.6 SSW, CA US", 
+    "SADDLEBACK BUTTE CALIFORNIA, CA US", "WHITTIER 3.6 ESE, CA US", "LA CRESCENTA MONTROSE 1.6 WNW, CA US", "TORRANCE 2.8 SW, CA US", 
+    "SAN GABRIEL DAM FC425B E, CA US", "PACOIMA DAM FC33A E, CA US", "SAN GABRIEL CANYON PH, CA US", "MOUNT WILSON CBS, CA US", 
+    "LOS ANGELES DOWNTOWN USC, CA US", "BURBANK VALLEY PUMP PLANT, CA US", "ALTADENA, CA US", "REDONDO BEACH 2.6 S, CA US", 
+    "WINNETKA 0.7 SSE, CA US", "WHITTIER HILLS CALIFORNIA, CA US", "WHITTIER 2.9 WNW, CA US", "BURBANK GLENDALE PASADENA AIRPORT, CA US", 
+    "COVINA CITY YARD FC387B, CA US", "WHITAKER PEAK CALIFORNIA, CA US", "CLAREMONT 0.5 E, CA US", "CANYON COUNTRY 2.6 E, CA US", 
+    "REDONDO BEACH, CA US", "VALYERMO CALIFORNIA, CA US", "TANBARK CALIFORNIA, CA US", "WHITTIER CITY YARD FC106C, CA US", 
+    "ACTON ESCONDIDO CANYON, CA US", "SAUGUS POWER PLANT 1, CA US", "CRYSTAL LAKE FC238C, CA US", "WOODLAND HILLS PIERCE COLLEGE, CA US", 
+    "CHILAO CALIFORNIA, CA US", "DIAMOND BAR 1.9 NNE, CA US", "LANCASTER, CA US", "ARCADIA 2.1 NNE, CA US", "CLAREMONT CALIFORNIA, CA US", 
+    "U C L A, CA US", "NEWHALL 5 NW, CA US", "SANTA MONICA MUNICIPAL AIRPORT, CA US", "PALMDALE AIRPORT, CA US", 
+    "CLEAR CREEK CALIFORNIA, CA US", "PASADENA, CA US", "ACTON CALIFORNIA, CA US", "DEL VALLE CALIFORNIA, CA US", "SANDBERG, CA US", 
+    "LEO CARRILLO CALIFORNIA, CA US", "BEVERLY HILLS CALIFORNIA, CA US", "LOS ANGELES 4.3 NNW, CA US", "CALABASAS 1.9 E, CA US", 
+    "LANCASTER 3.9 ESE, CA US", "POMONA 1.8 SW, CA US", "LOMITA 0.6 SE, CA US", "PACIFIC PALISADES 1.3 NW, CA US", 
+    "SANTA CLARITA 3.1 WSW, CA US", "LOS ANGELES 2.6 NW, CA US", "ALTADENA 1.9 ESE, CA US", "SANTA CLARITA 1.4 ESE, CA US", 
+    "ARTESIA 0.5 W, CA US", "GLENDORA 1.4 ESE, CA US", "LANCASTER 5.5 E, CA US", "REDONDO BEACH 2.0 SSW, CA US", 
+    "SAN PEDRO 1.4 W, CA US", "SOUTH PASADENA 3.7 WSW, CA US", "LA CRESCENTA MONTROSE 0.3 NE, CA US", "PASADENA 0.8 ENE, CA US", 
+    "REDONDO BEACH 2.1 SSW, CA US", "GLENDALE 3.0 ESE, CA US", "SOUTH PASADENA 0.9 SSW, CA US", "VALENCIA 1.7 SE, CA US", 
+    "ROLLING HILLS 3.9 SE, CA US", "CLAREMONT 0.6 SSE, CA US", "ALTADENA 1.7 W, CA US", "AGOURA HILLS 1.3 NNE, CA US", 
+    "CLAREMONT 0.7 SE, CA US", "SAN FERNANDO 7.8 SW, CA US", "CHINO AIRPORT, CA US", "CORONA MUNICIPAL AIRPORT, CA US", 
+    "FULLERTON MUNICIPAL AIRPORT, CA US"
+  ),
+  LATITUDE = c(
+    34.37890, 34.08410, 34.58830, 33.81177, 34.70500, 34.36170, 34.24470, 34.08690, 33.79970, 34.26996, 
+    33.92353, 34.71844, 34.21214, 33.93816, 34.12080, 33.77535, 33.77658, 33.77983, 33.80160, 34.13916, 
+    34.42500, 34.59580, 34.00500, 34.10520, 34.29360, 34.29481, 34.50250, 34.08420, 33.83396, 34.16890, 
+    34.16192, 34.05830, 34.27934, 34.07860, 34.73250, 34.15427, 34.39030, 34.03176, 34.18743, 33.98600, 
+    34.68470, 33.93729, 34.24063, 33.79018, 34.20520, 34.32940, 34.15530, 34.23080, 34.02360, 34.18660, 
+    34.18211, 33.81924, 34.20329, 33.98390, 33.98623, 34.19966, 34.09180, 34.56860, 34.12095, 34.42680, 
+    33.83420, 34.44560, 34.20690, 33.97580, 34.49380, 34.58998, 34.31750, 34.18190, 34.33170, 34.02319, 
+    34.74121, 34.16174, 34.13690, 34.06970, 34.39330, 34.02099, 34.62944, 34.27110, 34.14830, 34.44580, 
+    34.43110, 34.74361, 34.04560, 34.12500, 34.17124, 34.14057, 34.68018, 34.03737, 33.78667, 34.04730, 
+    34.38978, 34.08091, 34.17909, 34.40642, 33.86750, 34.13545, 34.68313, 33.82985, 33.73949, 34.10002, 
+    34.23706, 34.16480, 33.82739, 34.15343, 34.10038, 34.43710, 33.72147, 34.11355, 34.19050, 34.16745, 
+    34.11589, 34.19770, 33.97563, 33.89765, 33.87154
+  ),
+  LONGITUDE = c(
+    -117.6919, -118.5988, -118.0938, -118.1472, -118.4297, -118.4217, -118.5250, -118.4794, -118.3910, -118.2874, 
+    -118.3329, -118.0659, -118.4915, -118.3866, -117.9458, -118.3704, -118.1467, -118.3852, -118.3419, -118.1161, 
+    -118.5250, -118.5786, -118.4139, -117.8019, -118.3608, -118.1885, -117.8969, -118.1003, -118.3281, -118.2947, 
+    -118.1073, -118.6333, -118.3630, -118.6870, -118.3833, -118.4200, -118.0825, -118.4853, -118.1245, -118.4090, 
+    -117.8208, -117.9844, -118.2611, -118.3369, -117.8608, -118.4005, -117.9078, -118.0711, -118.2911, -118.3480, 
+    -118.1383, -118.3771, -118.5680, -118.0100, -118.0664, -118.3654, -117.8801, -118.7403, -117.7068, -118.4275, 
+    -118.3759, -117.8511, -117.7606, -118.0222, -118.2713, -118.4541, -117.8419, -118.5744, -118.0303, -117.7965, 
+    -118.2125, -118.0285, -117.7069, -118.4427, -118.5938, -118.4471, -118.0831, -118.1525, -118.1447, -118.2000, 
+    -118.6828, -118.7253, -118.9358, -118.4122, -118.4353, -118.6281, -118.1103, -117.7788, -118.3105, -118.5326, 
+    -118.5569, -118.2729, -118.1047, -118.4866, -118.0890, -117.8238, -118.0802, -118.3882, -118.3169, -118.2196, 
+    -118.2318, -118.1249, -118.3888, -118.2098, -118.1654, -118.5520, -118.2954, -117.7113, -118.1648, -118.7494, 
+    -117.7056, -118.5138, -117.6249, -117.6024, -117.9856
+  )
+)
+
+weather_stations_sf <- st_as_sf(weather_stations, coords = c("LONGITUDE", "LATITUDE"), crs = 4326)
+
+#Define the boundaries of LA county
+la_bbox <- st_bbox(c(xmin = -119, xmax = -117, ymin = 33, ymax = 35), crs = st_crs(4326))
+la_grid <- st_make_grid(st_as_sfc(la_bbox), cellsize = 0.1, square = TRUE)
+la_grid_sf <- st_sf(geometry = la_grid)
+
+#Find the centroid of each grid tile
+la_grid_sf <- la_grid_sf %>%
+  mutate(centroid = st_centroid(geometry))
+
+
+results <- list()
+
+#Loop through each grid tile to find the weather stations within it
+for (i in 1:nrow(la_grid_sf)) {
+  grid_tile <- la_grid_sf[i, ]
+  stations_in_tile <- weather_stations_sf[st_within(weather_stations_sf, grid_tile, sparse = FALSE), ]
+  
+  if (nrow(stations_in_tile) > 0) {
+    result <- data.frame(
+      tile_centroid_lat = st_coordinates(grid_tile$centroid)[2],
+      tile_centroid_lon = st_coordinates(grid_tile$centroid)[1],
+      station_name = stations_in_tile$NAME,
+      station_lat = st_coordinates(stations_in_tile)[, 2],
+      station_lon = st_coordinates(stations_in_tile)[, 1]
+    )
+    results[[i]] <- result
+  }
+}
+
+final_results <- do.call(rbind, results)
+head(final_results)
+
+```
+
+```{r}
+LAcomplete_prcp_names <- LAweather_filtered %>%
+  filter(!is.na(PRCP)) %>%
+  select(NAME, LATITUDE, LONGITUDE) %>%
+  distinct()
+
+
+print(LAcomplete_prcp_names)
+
+```
+```{r}
+
+LAcomplete_awnd_names_sf <- st_as_sf(LAcomplete_awnd_names, coords = c("LONGITUDE", "LATITUDE"), crs = 4326)
+
+la_county <- counties(state = "CA", cb = TRUE) %>%
+  filter(NAME == "Los Angeles") %>%
+  st_as_sf()
+
+la_bbox <- st_bbox(c(xmin = -119, xmax = -117, ymin = 33, ymax = 35), crs = st_crs(4326))
+
+la_grid <- st_make_grid(st_as_sfc(la_bbox), cellsize = 0.1, square = TRUE)
+
+la_grid_sf <- st_sf(geometry = la_grid)
+
+
+ggplot() +
+  geom_sf(data = la_county, fill = "white", color = "black") +
+  geom_sf(data = la_grid_sf, fill = NA, color = "gray") +
+  geom_sf(data = LAcomplete_awnd_names_sf, color = "blue", size = 3) +
+  geom_text(data = LAcomplete_awnd_names_sf, aes(x = st_coordinates(LAcomplete_awnd_names_sf)[,1], y = st_coordinates(LAcomplete_awnd_names_sf)[,2], label = NAME), hjust = 0, vjust = 1, size = 3, color = "blue") +
+  labs(title = "Weather Stations with Complete AWND Data in Los Angeles County")
+```
+
+```{r}
+tile_centroids <- final_results %>%
+  select(tile_centroid_lat, tile_centroid_lon)
+```
+
+```{r}
+matching <- read.csv("matching.csv")
+```
+
+```{r}
+final_results_coords <- final_results %>%
+  select(tile_centroid_lat, tile_centroid_lon)
+
+matching_coords <- matching %>%
+  select(tile_centroid_lat, tile_centroid_lon)
+
+unique_to_final_results <- anti_join(final_results_coords, matching_coords, by = c("tile_centroid_lat", "tile_centroid_lon"))
+
+unique_to_matching <- anti_join(matching_coords, final_results_coords, by = c("tile_centroid_lat", "tile_centroid_lon"))
+
+print("Coordinates unique to final_results:")
+print(unique_to_final_results)
+
+print("Coordinates unique to matching:")
+print(unique_to_matching)
+```
+```{r}
+matching <- as.data.frame(matching)
+LAcomplete_prcp_names <- as.data.frame(LAcomplete_prcp_names)
+
+find_closest_station <- function(lat, lon, stations) {
+  distances <- distHaversine(matrix(c(lon, lat), ncol = 2), matrix(c(stations$LONGITUDE, stations$LATITUDE), ncol = 2))
+  closest_index <- which.min(distances)
+  return(stations$NAME[closest_index])
+}
+
+matching <- matching %>%
+  rowwise() %>%
+  mutate(PRCP = find_closest_station(tile_centroid_lat, tile_centroid_lon, LAcomplete_prcp_names)) %>%
+  ungroup()
+```
+
+```{r}
+additional_data <- data.frame(
+  tile_centroid_lat = c(33.75, 33.75, 33.85, 33.85, 33.95, 33.95),
+  tile_centroid_lon = c(-117.65, -117.75, -118.15, -118.35, -118.15, -118.05),
+  AWND = c("LONG BEACH DAUGHERTY AIRPORT, CA US", "LONG BEACH DAUGHERTY AIRPORT, CA US", 
+               "LONG BEACH DAUGHERTY AIRPORT, CA US", "FULLERTON MUNICIPAL AIRPORT, CA US", 
+               "FULLERTON MUNICIPAL AIRPORT, CA US", "FULLERTON MUNICIPAL AIRPORT, CA US"),
+  PRCP = c("SAN PEDRO 1.4 W, CA US", "ROLLING HILLS 3.9 SE, CA US", 
+               "LONG BEACH 1.1 SE, CA US", "TORRANCE 0.7 E, CA US", 
+               "LONG BEACH DAUGHERTY AIRPORT, CA US", "ARTESIA 0.5 W, CA US"),
+  TAVG = c("LONG BEACH DAUGHERTY AIRPORT, CA US", "LONG BEACH DAUGHERTY AIRPORT, CA US", 
+           "LONG BEACH DAUGHERTY AIRPORT, CA US", "LONG BEACH DAUGHERTY AIRPORT, CA US", 
+           "LONG BEACH DAUGHERTY AIRPORT, CA US", "LONG BEACH DAUGHERTY AIRPORT, CA US")
+)
+
+matching <- bind_rows(matching, additional_data)
+```
+```{r}
+matching <- matching %>%
+  select(-X)
+```
+
+
+Data Matching with Weather Station
+```{r}
+results_list <- list()
+
+for (i in 1:nrow(matching)) {
+  row <- matching[i, ]
+  
+  awnd_data <- LAweather_filtered %>%
+    filter(NAME == row$AWND) %>%
+    select(DATE, AWND) %>%
+    mutate(tile_centroid_lat = row$tile_centroid_lat,
+           tile_centroid_lon = row$tile_centroid_lon)
+  
+  prcp_data <- LAweather_filtered %>%
+    filter(NAME == row$PRCP) %>%
+    select(DATE, PRCP) %>%
+    mutate(tile_centroid_lat = row$tile_centroid_lat,
+           tile_centroid_lon = row$tile_centroid_lon)
+  
+  tavg_data <- LAweather_filtered %>%
+    filter(NAME == row$TAVG) %>%
+    select(DATE, TAVG) %>%
+    mutate(tile_centroid_lat = row$tile_centroid_lat,
+           tile_centroid_lon = row$tile_centroid_lon)
+  
+  combined_data <- awnd_data %>%
+    full_join(prcp_data, by = c("tile_centroid_lat", "tile_centroid_lon", "DATE")) %>%
+    full_join(tavg_data, by = c("tile_centroid_lat", "tile_centroid_lon", "DATE"))
+  
+  results_list[[i]] <- combined_data
+}
+final_dataset <- bind_rows(results_list)
+
+
+```
+
+```{r}
+final_dataset <- final_dataset %>%
+  mutate(PRCP = replace_na(PRCP, 0))
+final_dataset <- final_dataset %>%
+  mutate(na_count = rowSums(is.na(final_dataset)))
+print(final_dataset)
+```
+
+```{r}
+final_dataset <- final_dataset %>%
+  rename(latitude = tile_centroid_lat,
+         longitude = tile_centroid_lon)
+```
+
+```{r}
+LAwildfire_filtered <- LAwildfire_filtered %>%
+  rename(DATE = acq_date)
+```
+
+MATCH WILDFIRE TO FINAL DATASET
+```{r}
+find_closest_coords <- function(lat, lon, coords) {
+  distances <- distHaversine(matrix(c(lon, lat), ncol = 2), matrix(c(coords$longitude, coords$latitude), ncol = 2))
+  closest_index <- which.min(distances)
+  return(coords[closest_index, ])
+}
+closest_coords <- LAwildfire_filtered %>%
+  rowwise() %>%
+  mutate(
+    closest = list(find_closest_coords(latitude, longitude, final_dataset)),
+    matched_lat = closest$latitude,
+    matched_lon = closest$longitude
+  ) %>%
+  ungroup() %>%
+  select(-closest)
+
+
+```
+
+```{r}
+merged_dataset <- closest_coords %>%
+  full_join(final_dataset, by = c("matched_lat" = "latitude", "matched_lon" = "longitude", "DATE" = "DATE"))
+print(merged_dataset)
+
+```
+
+```{r}
+final_dataset_with_frp <- merged_dataset %>%
+  select(matched_lat, matched_lon, DATE, frp, AWND, PRCP, TAVG) %>%
+  rename(latitude = matched_lat, longitude = matched_lon)
+print(final_dataset_with_frp)
+```
+```{r}
+cleaned_final_la_dataset <- merged_dataset %>%
+  select(-satellite, -instrument, -latitude, -longitude, -type, -bright_t31, -confidence, -year, -month, -county)
+```
+
+```{r}
+num_na_tavg <- cleaned_final_la_dataset %>%
+  filter(!is.na(frp)) %>%
+  summarize(num_na_tavg = sum(is.na(TAVG)))
+print(num_na_tavg)
+```
+```{r}
+indices_to_update <- c(154:159)
+cleaned_final_la_dataset <- cleaned_final_la_dataset %>%
+  mutate(TAVG = if_else(row_number() %in% indices_to_update, 75, TAVG))
+```
+
+```{r}
+write.csv(cleaned_final_la_dataset, "cleaned_final_la_dataset.csv", row.names = FALSE)
+```
+
+```{r}
+unique_coords_count <- cleaned_final_la_dataset %>%
+  distinct(matched_lat, matched_lon) %>%
+  nrow()
+print(unique_coords_count)
+```
+
+
+Riverside Data Cleaning
+LOAD
+```{r pressure, echo=FALSE}
+RVweather_raw <- read.csv("RVweathercomplete.csv")
+
+RVwildfire_raw <- read.csv("RVwildfire_filtered::.csv")
+```
+GET UNIQUE STATION NAMES
+```{r}
+RVcomplete_station_names <- RVweather_raw %>%
+  select(NAME, LATITUDE, LONGITUDE) %>%
+  distinct()
+
+print(RVcomplete_station_names)
+```
+
+CLEAN DATA TO AFTER 2016
+```{r}
+RVweather_filtered <- RVweather_raw %>%
+  filter(DATE >= as.Date("2016-01-01"))
+
+RVwildfire_filtered <- RVwildfire_raw %>%
+  filter(acq_date >= as.Date("2016-01-01"))
+```
+
+GRID RIVERSIDE
+```{r}
+rv_county <- counties(state = "CA", cb = TRUE) %>%
+    filter(NAME == "Riverside") %>%
+    st_as_sf()
+riverside_bbox <- st_bbox(c(xmin = -117.85, xmax = -114.5, ymin = 33.4, ymax = 34.15), crs = st_crs(4326))
+riverside_grid <- st_make_grid(st_as_sfc(riverside_bbox), cellsize = 0.1, square = TRUE)
+riverside_grid_sf <- st_sf(geometry = riverside_grid)
+Riverside_stations_sf <- st_as_sf(RVweather_filtered, coords = c("LONGITUDE", "LATITUDE"), crs = 4326)
+
+#plot weather stations with grid
+ggplot() +
+  geom_sf(data = rv_county, fill = "white", color = "black") +
+  geom_sf(data = riverside_grid_sf, fill = NA, color = "gray") +
+  geom_sf(data = Riverside_stations_sf, color = "blue", size = 2) +
+  labs(title = "Weather Stations and Grid Tiles in Riverside County")
+```
+FIND CENTROID OF EVERY TILE
+```{r}
+riverside_grid_sf <- riverside_grid_sf %>%
+  mutate(centroid = st_centroid(geometry))
+
+#extract coordinates of each centroid
+tile_coordinates <- st_coordinates(riverside_grid_sf$centroid)
+
+tile_coordinates_df <- data.frame(tile_coordinates)
+
+colnames(tile_coordinates_df) <- c("longitude", "latitude")
+
+head(tile_coordinates_df)
+```
+All stations for complete TAVG data
+```{r}
+
+start_date <- as.Date("2016-01-01")
+end_date <- as.Date("2020-12-31")
+complete_tavg_stations <- RVweather_filtered %>%
+  filter(DATE >= start_date & DATE <= end_date) %>%
+  group_by(NAME) %>%
+  summarize(missing_tavg_count = sum(is.na(TAVG))) %>%
+  filter(missing_tavg_count == 0) %>%
+  select(NAME)
+
+RV_TAVG_stations <- RVweather_filtered %>%
+  filter(NAME %in% complete_tavg_stations$NAME) %>%
+  select(NAME, LATITUDE, LONGITUDE) %>%
+  distinct()
+print(RV_TAVG_stations)
+```
+
+```{r}
+
+start_date <- as.Date("2016-01-01")
+end_date <- as.Date("2020-12-31")
+
+
+complete_prcp_stations <- RVweather_filtered %>%
+  filter(DATE >= start_date & DATE <= end_date) %>%
+  group_by(NAME) %>%
+  summarize(missing_prcp_count = sum(is.na(PRCP))) %>%
+  filter(missing_prcp_count == 0) %>%
+  select(NAME)
+RV_PRCP_stations <- RVweather_filtered %>%
+  filter(NAME %in% complete_prcp_stations$NAME) %>%
+  select(NAME, LATITUDE, LONGITUDE) %>%
+  distinct()
+
+print(RV_PRCP_stations)
+
+```
+SANITY CHECK FOR PRCP STATIONS
+
+```{r}
+RVweather_filtered <- RVweather_filtered %>%
+  mutate(DATE = as.Date(DATE, format = "%Y-%m-%d"))
+#new date range
+start_date <- as.Date("2016-01-01")
+end_date <- as.Date("2020-12-31")
+
+complete_dates <- data.frame(DATE = seq(start_date, end_date, by = "day"))
+
+complete_data <- RVweather_filtered %>%
+  select(NAME) %>%
+  distinct() %>%
+  crossing(complete_dates)
+#join complete dataset and original dataset to check for completeness
+RVweather_complete <- complete_data %>%
+  left_join(RVweather_filtered, by = c("NAME", "DATE"))
+
+#check for missing PRCP values
+complete_prcp_stations <- RVweather_complete %>%
+  group_by(NAME) %>%
+  summarize(missing_prcp_count = sum(is.na(PRCP))) %>%
+  filter(missing_prcp_count == 0) %>%
+  select(NAME)
+#merge datasets to get the coordinates
+RV_PRCP_stations <- RVweather_filtered %>%
+  filter(NAME %in% complete_prcp_stations$NAME) %>%
+  select(NAME, LATITUDE, LONGITUDE) %>%
+  distinct()
+
+# View the new dataset
+print(RV_PRCP_stations)
+```
+SANITY CHECK FOR TAVG STATIONS
+```{r}
+#new date range
+start_date <- as.Date("2016-01-01")
+end_date <- as.Date("2020-12-31")
+
+complete_dates <- data.frame(DATE = seq(start_date, end_date, by = "day"))
+
+# Create a complete dataset with all dates for each station
+complete_data <- RVweather_filtered %>%
+  select(NAME) %>%
+  distinct() %>%
+  crossing(complete_dates)
+#Join the complete dataset and original dataset
+RVweather_complete <- complete_data %>%
+  left_join(RVweather_filtered, by = c("NAME", "DATE"))
+
+#check for missing TAVG values
+complete_tavg_stations <- RVweather_complete %>%
+  group_by(NAME) %>%
+  summarize(missing_tavg_count = sum(is.na(TAVG))) %>%
+  filter(missing_tavg_count == 0) %>%
+  select(NAME)
+
+RV_TAVG_stations <- RVweather_filtered %>%
+  filter(NAME %in% complete_tavg_stations$NAME) %>%
+  select(NAME, LATITUDE, LONGITUDE) %>%
+  distinct()
+
+print(RV_TAVG_stations)
+
+```
+
+
+AWND STATION LIST
+```{r}
+#Filter date range
+start_date <- as.Date("2016-01-01")
+end_date <- as.Date("2020-12-31")
+complete_awnd_stations <- RVweather_filtered %>%
+  filter(DATE >= start_date & DATE <= end_date) %>%
+  group_by(NAME) %>%
+  summarize(missing_awnd_count = sum(is.na(AWND))) %>%
+  filter(missing_awnd_count == 0) %>%
+  select(NAME)
+
+RV_AWND_stations <- RVweather_filtered %>%
+  filter(NAME %in% complete_awnd_stations$NAME) %>%
+  select(NAME, LATITUDE, LONGITUDE) %>%
+  distinct()
+
+print(RV_AWND_stations)
+
+```
+AWND Round 2
+```{r}
+
+stations_with_awnd <- RVweather_filtered %>%
+  filter(!is.na(AWND)) %>%
+  select(NAME, LATITUDE, LONGITUDE) %>%
+  distinct()
+
+print(stations_with_awnd)
+
+```
+CLOSEST TAVG STATIONS
+```{r}
+find_closest_station <- function(lat, lon, stations) {
+  distances <- distHaversine(matrix(c(lon, lat), ncol = 2), matrix(c(stations$LONGITUDE, stations$LATITUDE), ncol = 2))
+  closest_index <- which.min(distances)
+  return(stations$NAME[closest_index])
+}
+tile_coordinates_df <- tile_coordinates_df %>%
+  rowwise() %>%
+  mutate(TAVG_STATION = find_closest_station(latitude, longitude, RV_TAVG_stations)) %>%
+  ungroup()
+
+print(tile_coordinates_df)
+
+```
+ADD ADDITIONAL PRCP STATIONS
+```{r}
+#additional rv stations
+additional_stations <- data.frame(
+  NAME = c("MARCH AFB, CA US", "RIVERSIDE MUNICIPAL AIRPORT, CA US", "PALM SPRINGS ASOS, CA US", 
+           "DESERT RESORTS REGIONAL AIRPORT, CA US", "BLYTHE ASOS, CA US"),
+  LATITUDE = c(33.90000, 33.95282, 33.82216, 33.63166, 33.61876),
+  LONGITUDE = c(-117.2500, -117.4352, -116.5043, -116.1641, -114.7145)
+)
+
+RV_PRCP_stations <- bind_rows(RV_PRCP_stations, additional_stations)
+
+```
+
+CLOSEST PRCP STATION
+```{r}
+#function to find the closest station
+find_closest_station <- function(lat, lon, stations) {
+  distances <- distHaversine(matrix(c(lon, lat), ncol = 2), matrix(c(stations$LONGITUDE, stations$LATITUDE), ncol = 2))
+  closest_index <- which.min(distances)
+  return(stations$NAME[closest_index])
+}
+tile_coordinates_df <- tile_coordinates_df %>%
+  rowwise() %>%
+  mutate(PRCP_STATION = find_closest_station(latitude, longitude, RV_PRCP_stations)) %>%
+  ungroup()
+
+print(tile_coordinates_df)
+
+```
+
+
+CLOSEST AWND STATION
+
+```{r}
+find_closest_station <- function(lat, lon, stations) {
+  distances <- distHaversine(matrix(c(lon, lat), ncol = 2), matrix(c(stations$LONGITUDE, stations$LATITUDE), ncol = 2))
+  closest_index <- which.min(distances)
+  return(stations$NAME[closest_index])
+}
+tile_coordinates_df <- tile_coordinates_df %>%
+  rowwise() %>%
+  mutate(AWND_STATION = find_closest_station(latitude, longitude, stations_with_awnd)) %>%
+  ungroup()
+print(tile_coordinates_df)
+
+```
+
+JOIN ALL WEATHER DATA
+
+```{r}
+RVweather_filtered <- RVweather_filtered %>%
+  mutate(DATE = as.Date(DATE, format = "%Y-%m-%d")) 
+
+results_list <- list()
+
+for (i in 1:nrow(tile_coordinates_df)) {
+  row <- tile_coordinates_df[i, ]
+  
+  awnd_data <- RVweather_filtered %>%
+    filter(NAME == row$AWND_STATION) %>%
+    select(DATE, AWND) %>%
+    mutate(latitude = row$latitude,
+           longitude = row$longitude)
+  
+  prcp_data <- RVweather_filtered %>%
+    filter(NAME == row$PRCP_STATION) %>%
+    select(DATE, PRCP) %>%
+    mutate(latitude = row$latitude,
+           longitude = row$longitude)
+  
+  tavg_data <- RVweather_filtered %>%
+    filter(NAME == row$TAVG_STATION) %>%
+    select(DATE, TAVG) %>%
+    mutate(latitude = row$latitude,
+           longitude = row$longitude)
+  combined_data <- awnd_data %>%
+    full_join(prcp_data, by = c("latitude", "longitude", "DATE")) %>%
+    full_join(tavg_data, by = c("latitude", "longitude", "DATE"))
+  
+  results_list[[i]] <- combined_data
+}
+
+#Combine all results
+finalrv_dataset <- bind_rows(results_list)
+
+#View the final rv dataset
+print(finalrv_dataset)
+
+
+
+```
+
+
+```{r}
+na_counts <- finalrv_dataset %>%
+  summarize_all(~ sum(is.na(.)))
+print(na_counts)
+```
+
+```{r}
+RVwildfire_filtered <- RVwildfire_filtered %>%
+  rename(DATE = acq_date)
+```
+
+MATCH WILDFIRE TO FINAL DATASET
+```{r}
+#apply function to find the closest coordinates
+find_closest_coords <- function(lat, lon, coords) {
+  distances <- distHaversine(matrix(c(lon, lat), ncol = 2), matrix(c(coords$longitude, coords$latitude), ncol = 2))
+  closest_index <- which.min(distances)
+  return(coords[closest_index, ])
+}
+
+matched_coords <- RVwildfire_filtered %>%
+  rowwise() %>%
+  mutate(
+    closest = list(find_closest_coords(latitude, longitude, tile_coordinates_df)),
+    matched_lat = closest$latitude,
+    matched_lon = closest$longitude
+  ) %>%
+  ungroup() %>%
+  select(-closest)
+
+print(matched_coords)
+
+```
