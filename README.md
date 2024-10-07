@@ -73,10 +73,10 @@ This project explores the use of machine learning models to predict wildfire occ
 ## Visualizations
 
 ### Wildfire Locations in Los Angeles County
-![Wildfire Locations in Los Angeles County](visualizations/Distribution_of_Fire_Occurrences_in_Los Angeles_County_From_2016_to_2020.png) 
+![Wildfire Locations in Los Angeles County](visualizations/Distribution_of_Fire_Occurrences_in_Los_Angeles_County_From_2016_to_2020.png)
 
 ### Wildfire Locations in Riverside County
-![Wildfire Risk Comparison by County](visualizations/Distribution_of_Fire_Occurrences_in_Riverside_County_From_2016_to_2020.png)
+![Wildfire Locations in Riverside County](visualizations/Distribution_of_Fire_Occurrences_in_Riverside_County_From_2016_to_2020.png)
 
 ## Conclusion
 
